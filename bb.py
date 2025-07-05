@@ -15,30 +15,39 @@ def load_data():
     df = pd.read_excel(DATA_URL)
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-    # Clean 'name' column
+    # Rename target column for convenience
+    df.rename(columns={
+        'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'
+    }, inplace=True)
+
+    # Keep only rows with required columns and non-null targets
+    df = df[['name', 'emission_factor']].copy()
     df['name'] = df['name'].astype(str).str.strip()
     df = df[df['name'] != '']
-
-    # Convert target column to numeric and drop NaNs there
-    df['target'] = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'], errors='coerce')
-    df = df.dropna(subset=['target']).reset_index(drop=True)
+    df = df.dropna(subset=['emission_factor']).reset_index(drop=True)
 
     return df
 
 df = load_data()
 
-X = df[['name']]
-y = df['target']
+required_cols = ['name', 'emission_factor']
+if not all(col in df.columns for col in required_cols):
+    st.error(f"Dataset must contain columns: {required_cols}")
+    st.stop()
 
-categorical_features = ['name']
+X = df[['name']]  # must be DataFrame, not Series
+y = df['emission_factor']
+
+# Pipeline for categorical column 'name'
 categorical_transformer = Pipeline([
     ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
     ('onehot', OneHotEncoder(handle_unknown='ignore'))
 ])
 
-preprocessor = ColumnTransformer([
-    ('cat', categorical_transformer, categorical_features)
-])
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('cat', categorical_transformer, ['name'])
+    ])
 
 model = Pipeline([
     ('preprocessor', preprocessor),
@@ -47,12 +56,13 @@ model = Pipeline([
 
 model.fit(X, y)
 
-industry_input = st.selectbox("Select Industry/Name", sorted(df['name'].unique()))
+industry_input = st.selectbox("Select Industry Name", sorted(df['name'].unique()))
 
 if st.button("Predict Emission Factor"):
     input_df = pd.DataFrame({'name': [industry_input]})
-    pred = model.predict(input_df)[0]
-    st.success(f"Predicted Emission Factor: {pred:.4f}")
+    prediction = model.predict(input_df)[0]
+    st.success(f"Predicted Emission Factor: {prediction:.4f}")
+
 
 
 
