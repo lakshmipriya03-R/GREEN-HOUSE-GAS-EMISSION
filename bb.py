@@ -15,23 +15,20 @@ def load_data():
     df = pd.read_excel(DATA_URL)
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-    # Clean data
+    # Clean 'name' column
     df['name'] = df['name'].astype(str).str.strip()
-    df = df[df['name'] != '']  # remove empty strings if any
-    df = df[df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'].notna()]
-    df = df.reset_index(drop=True)
+    df = df[df['name'] != '']
+
+    # Convert target column to numeric and drop NaNs there
+    df['target'] = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'], errors='coerce')
+    df = df.dropna(subset=['target']).reset_index(drop=True)
+
     return df
 
 df = load_data()
 
-required_cols = ['name', 'supply_chain_ghg_emission_factors_for_us_commodities_and_industries']
-if not all(col in df.columns for col in required_cols):
-    st.error(f"Dataset must contain columns: {required_cols}")
-    st.stop()
-
 X = df[['name']]
-y = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'], errors='coerce')
-y = y.dropna()
+y = df['target']
 
 categorical_features = ['name']
 categorical_transformer = Pipeline([
@@ -56,6 +53,7 @@ if st.button("Predict Emission Factor"):
     input_df = pd.DataFrame({'name': [industry_input]})
     pred = model.predict(input_df)[0]
     st.success(f"Predicted Emission Factor: {pred:.4f}")
+
 
 
 
