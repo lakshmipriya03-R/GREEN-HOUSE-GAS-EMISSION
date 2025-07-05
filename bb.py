@@ -14,6 +14,12 @@ DATA_URL = "https://raw.githubusercontent.com/lakshmipriya03-R/GREEN-HOUSE-GAS-E
 def load_data():
     df = pd.read_excel(DATA_URL)
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+
+    # Clean dataframe
+    df = df[df['name'].notna()]
+    df = df[df['name'].str.strip() != ""]
+    df = df[df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'].notna()]
+    df = df.reset_index(drop=True)
     return df
 
 df = load_data()
@@ -23,10 +29,8 @@ if not all(col in df.columns for col in required_cols):
     st.error(f"Dataset must contain columns: {required_cols}")
     st.stop()
 
-# Prepare features and target
 X = df[['name']]
-y = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'], errors='coerce')
-y = y.fillna(0)  # fill missing target values with 0, or choose appropriate strategy
+y = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'])
 
 categorical_features = ['name']
 categorical_transformer = Pipeline([
