@@ -17,20 +17,26 @@ def load_data():
         df = pd.read_excel(DATA_URL)
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-        if 'supply_chain_ghg_emission_factors_for_us_commodities_and_industries' in df.columns:
-            df.rename(columns={'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'}, inplace=True)
+        # Handle target column naming
+        target_col = [col for col in df.columns if 'ghg' in col.lower() or 'emission' in col.lower()]
+        if target_col:
+            df = df.rename(columns={target_col[0]: 'emission_factor'})
+        else:
+            raise ValueError("Could not find emission factor column")
 
+        # Clean data
         df['name'] = df['name'].astype(str).str.strip()
         df['emission_factor'] = pd.to_numeric(df['emission_factor'], errors='coerce')
         
-        df = df.dropna(subset=['emission_factor'])
+        # Remove invalid rows
+        df = df.dropna(subset=['emission_factor', 'name'])
         df = df[df['name'] != '']
-        df = df.reset_index(drop=True)
+        df = df[~df['emission_factor'].isin([np.inf, -np.inf])]
         
         if len(df) == 0:
-            raise ValueError("No valid data remaining after preprocessing")
+            raise ValueError("No valid data remaining after cleaning")
             
-        return df
+        return df.reset_index(drop=True)
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
@@ -42,17 +48,16 @@ if df is not None:
         X = df[['name']]
         y = df['emission_factor'].astype('float32')
         
-        # Ensure we have valid data
-        mask = ~y.isna() & ~y.isin([np.inf, -np.inf])
-        y = y[mask]
-        X = X.loc[mask]
-        
-        if len(X) == 0 or len(y) == 0:
-            raise ValueError("No valid samples remaining after cleaning")
-        
+        # Final validation
+        if len(X) != len(y):
+            raise ValueError("Feature and target lengths don't match")
+        if len(X) == 0:
+            raise ValueError("No valid samples available for training")
+
+        # Build pipeline
         cat_pipe = Pipeline([
             ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore'))
+            ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
         ])
 
         preprocessor = ColumnTransformer([
@@ -61,11 +66,17 @@ if df is not None:
 
         model = Pipeline([
             ('preprocessor', preprocessor),
-            ('regressor', xgb.XGBRegressor(objective='reg:squarederror', random_state=42))
+            ('regressor', xgb.XGBRegressor(
+                objective='reg:squarederror',
+                random_state=42,
+                enable_categorical=False
+            ))
         ])
 
+        # Train model
         model.fit(X, y)
 
+        # Prediction interface
         industry = st.selectbox("Select Industry Name", options=sorted(df['name'].unique()))
 
         if st.button("Predict Emission Factor"):
