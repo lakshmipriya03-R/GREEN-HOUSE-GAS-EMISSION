@@ -13,18 +13,21 @@ DATA_URL = "https://github.com/lakshmipriya03-R/GREEN-HOUSE-GAS-EMISSION/raw/mai
 @st.cache_data
 def load_data():
     df = pd.read_excel(DATA_URL)
-    # Clean columns
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
-    # Rename target col for ease
+
+    # Rename target column to simpler name
     if 'supply_chain_ghg_emission_factors_for_us_commodities_and_industries' in df.columns:
-        df = df.rename(columns={'supply_chain_ghg_emission_factors_for_us_commodities_and_industries':'emission_factor'})
-    # Keep required cols only
-    df = df[['name', 'emission_factor']].copy()
-    # Clean data
+        df.rename(columns={
+            'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'
+        }, inplace=True)
+
     df['name'] = df['name'].astype(str).str.strip()
     df['emission_factor'] = pd.to_numeric(df['emission_factor'], errors='coerce')
+
+    # Drop rows with missing target or empty name
     df = df.dropna(subset=['emission_factor'])
     df = df[df['name'] != '']
+
     df = df.reset_index(drop=True)
     return df
 
@@ -32,6 +35,11 @@ df = load_data()
 
 X = df[['name']]
 y = df['emission_factor']
+
+# Align X and y after dropping missing y values just in case
+y = pd.to_numeric(y, errors='coerce')
+y = y.dropna()
+X = X.loc[y.index]
 
 cat_pipe = Pipeline([
     ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
@@ -52,9 +60,9 @@ model.fit(X, y)
 industry = st.selectbox("Select Industry Name", options=sorted(df['name'].unique()))
 
 if st.button("Predict Emission Factor"):
-    pred = model.predict(pd.DataFrame({'name':[industry]}))[0]
+    input_df = pd.DataFrame({'name': [industry]})
+    pred = model.predict(input_df)[0]
     st.success(f"Predicted Emission Factor: {pred:.6f}")
-
 
 
 
