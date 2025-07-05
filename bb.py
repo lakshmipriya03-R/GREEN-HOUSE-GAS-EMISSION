@@ -1,68 +1,75 @@
 import streamlit as st
 import pandas as pd
-import xgboost as xgb
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
 import numpy as np
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.impute import SimpleImputer
+from xgboost import XGBRegressor
 
+st.set_page_config(page_title="GHG Emission Predictor", layout="centered")
 st.title("Greenhouse Gas Emission Predictor")
 
-DATA_URL = "https://github.com/lakshmipriya03-R/GREEN-HOUSE-GAS-EMISSION/raw/main/greenhouse_gas.xlsx"
-
+# Load from raw GitHub link
 @st.cache_data
 def load_data():
-    df = pd.read_excel(DATA_URL)
-    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
-    
-    # Rename column if needed
-    if 'supply_chain_ghg_emission_factors_for_us_commodities_and_industries' in df.columns:
-        df.rename(columns={
-            'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'
-        }, inplace=True)
+    url = "https://github.com/lakshmipriya03-R/GREEN-HOUSE-GAS-EMISSION/raw/main/greenhouse_gas.xlsx"
+    df = pd.read_excel(url)
 
-    df = df.rename(columns={'name': 'industry_name'})  # Make sure this is consistent
+    # Clean column names
+    df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
 
-    df['industry_name'] = df['industry_name'].astype(str).str.strip()
-    df['emission_factor'] = pd.to_numeric(df['emission_factor'], errors='coerce')
+    # Normalize/rename for consistency
+    df.rename(columns={
+        "supply_chain_emission_factors_without_margins": "emission_factor"
+    }, inplace=True)
 
-    # Drop rows with missing values
-    df = df.dropna(subset=['emission_factor', 'industry_name'])
-    df = df[df['industry_name'] != '']
-    df = df.reset_index(drop=True)
+    df["industry_name"] = df["industry_name"].astype(str).str.strip()
+    df["substance"] = df["substance"].astype(str).str.strip()
+
+    # Convert emission factor safely
+    df["emission_factor"] = pd.to_numeric(df["emission_factor"], errors="coerce")
+
+    # Drop rows with missing required values
+    df.dropna(subset=["industry_name", "substance", "emission_factor"], inplace=True)
+
     return df
 
+# Load dataset
 df = load_data()
 
-X = df[['industry_name']]
-y = df['emission_factor'].astype(np.float32)
+# Features and Target
+X = df[["industry_name", "substance"]]
+y = df["emission_factor"].astype(np.float32)
 
-# Preprocessing pipeline
-cat_pipe = Pipeline([
-    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
-    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+# Define pipeline
+categorical_features = ["industry_name", "substance"]
+categorical_transformer = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
+    ("encoder", OneHotEncoder(handle_unknown="ignore"))
 ])
 
-preprocessor = ColumnTransformer([
-    ('cat', cat_pipe, ['industry_name'])
+preprocessor = ColumnTransformer(transformers=[
+    ("cat", categorical_transformer, categorical_features)
 ])
 
-# Full model pipeline
-model = Pipeline([
-    ('preprocessor', preprocessor),
-    ('regressor', xgb.XGBRegressor(objective='reg:squarederror', random_state=42))
+model_pipeline = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("regressor", XGBRegressor(objective="reg:squarederror", n_estimators=100, random_state=42))
 ])
 
 # Fit model
-model.fit(X, y)
+model_pipeline.fit(X, y)
 
 # Streamlit UI
-st.subheader("Predict GHG Emission Factor")
-industry = st.selectbox("Select Industry Name", options=sorted(df['industry_name'].unique()))
+st.subheader("📊 Predict Emission Factor")
+
+industry = st.selectbox("Select Industry", sorted(df["industry_name"].unique()))
+substance = st.selectbox("Select Substance", sorted(df["substance"].unique()))
 
 if st.button("Predict"):
-    input_df = pd.DataFrame({'industry_name': [industry]})
-    prediction = model.predict(input_df)[0]
-    st.success(f"Predicted Emission Factor: {prediction:.6f}")
+    input_df = pd.DataFrame([[industry, substance]], columns=["industry_name", "substance"])
+    prediction = model_pipeline.predict(input_df)[0]
+    st.success(f"Predicted GHG Emission Factor: **{prediction:.6f}**")
+
 
