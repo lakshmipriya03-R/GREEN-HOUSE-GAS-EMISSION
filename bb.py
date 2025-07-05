@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from sklearn.pipeline import Pipeline
@@ -24,11 +23,10 @@ if not all(col in df.columns for col in required_cols):
     st.error(f"Dataset must contain columns: {required_cols}")
     st.stop()
 
-st.write("Dataset preview:")
-st.dataframe(df.head())
-
+# Prepare features and target
 X = df[['name']]
-y = df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries']
+y = pd.to_numeric(df['supply_chain_ghg_emission_factors_for_us_commodities_and_industries'], errors='coerce')
+y = y.fillna(0)  # fill missing target values with 0, or choose appropriate strategy
 
 categorical_features = ['name']
 categorical_transformer = Pipeline([
