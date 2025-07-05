@@ -8,53 +8,50 @@ import xgboost as xgb
 
 st.title("Greenhouse Gas Emission Predictor")
 
-uploaded_file = st.file_uploader("Upload your dataset (Excel or CSV)", type=["xlsx", "csv"])
+DATA_URL = "https://raw.githubusercontent.com/lakshmipriya03-R/GREEN-HOUSE-GAS-EMISSION/main/greenhouse_gas.xlsx"
 
-if uploaded_file is not None:
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
+@st.cache_data
+def load_data():
+    df = pd.read_excel(DATA_URL)
+    return df
 
-    required_cols = ['industry_name', 'substance', 'supply_chain_emission_factors_without_margins']
-    if not all(col in df.columns for col in required_cols):
-        st.error(f"Dataset must contain columns: {required_cols}")
-        st.stop()
+df = load_data()
 
-    st.write("Dataset preview:")
-    st.dataframe(df.head())
+required_cols = ['industry_name', 'substance', 'supply_chain_emission_factors_without_margins']
+if not all(col in df.columns for col in required_cols):
+    st.error(f"Dataset must contain columns: {required_cols}")
+    st.stop()
 
-    X = df[['industry_name', 'substance']]
-    y = df['supply_chain_emission_factors_without_margins']
+st.write("Dataset preview:")
+st.dataframe(df.head())
 
-    categorical_features = ['industry_name', 'substance']
-    categorical_transformer = Pipeline([
-        ('imputer', SimpleImputer(strategy='most_frequent')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
-    ])
+X = df[['industry_name', 'substance']]
+y = df['supply_chain_emission_factors_without_margins']
 
-    preprocessor = ColumnTransformer([
-        ('cat', categorical_transformer, categorical_features)
-    ])
+categorical_features = ['industry_name', 'substance']
+categorical_transformer = Pipeline([
+    ('imputer', SimpleImputer(strategy='most_frequent')),
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))
+])
 
-    model = Pipeline([
-        ('preprocessor', preprocessor),
-        ('regressor', xgb.XGBRegressor(objective='reg:squarederror', random_state=42))
-    ])
+preprocessor = ColumnTransformer([
+    ('cat', categorical_transformer, categorical_features)
+])
 
-    model.fit(X, y)
+model = Pipeline([
+    ('preprocessor', preprocessor),
+    ('regressor', xgb.XGBRegressor(objective='reg:squarederror', random_state=42))
+])
 
-    industry_input = st.selectbox("Select Industry", sorted(df['industry_name'].unique()))
-    substance_input = st.selectbox("Select Substance", sorted(df['substance'].unique()))
+model.fit(X, y)
 
-    if st.button("Predict Emission Factor"):
-        input_df = pd.DataFrame({'industry_name': [industry_input], 'substance': [substance_input]})
-        pred = model.predict(input_df)[0]
-        st.success(f"Predicted Supply Chain Emission Factor: {pred:.4f}")
+industry_input = st.selectbox("Select Industry", sorted(df['industry_name'].unique()))
+substance_input = st.selectbox("Select Substance", sorted(df['substance'].unique()))
 
-else:
-    st.info("Please upload your dataset file to start.")
-
+if st.button("Predict Emission Factor"):
+    input_df = pd.DataFrame({'industry_name': [industry_input], 'substance': [substance_input]})
+    pred = model.predict(input_df)[0]
+    st.success(f"Predicted Supply Chain Emission Factor: {pred:.4f}")
 
 
 
