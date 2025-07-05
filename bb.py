@@ -15,19 +15,15 @@ def load_data():
     df = pd.read_excel(DATA_URL)
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-    # Rename target column to simpler name
+    # Rename target column for convenience
     if 'supply_chain_ghg_emission_factors_for_us_commodities_and_industries' in df.columns:
-        df.rename(columns={
-            'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'
-        }, inplace=True)
+        df.rename(columns={'supply_chain_ghg_emission_factors_for_us_commodities_and_industries': 'emission_factor'}, inplace=True)
 
     df['name'] = df['name'].astype(str).str.strip()
     df['emission_factor'] = pd.to_numeric(df['emission_factor'], errors='coerce')
 
-    # Drop rows with missing target or empty name
     df = df.dropna(subset=['emission_factor'])
     df = df[df['name'] != '']
-
     df = df.reset_index(drop=True)
     return df
 
@@ -36,10 +32,11 @@ df = load_data()
 X = df[['name']]
 y = df['emission_factor']
 
-# Align X and y after dropping missing y values just in case
-y = pd.to_numeric(y, errors='coerce')
-y = y.dropna()
-X = X.loc[y.index]
+# Fix: convert y to float32, drop missing, align X
+y = pd.to_numeric(y, errors='coerce').astype('float32')
+mask = ~y.isna()
+y = y[mask]
+X = X.loc[mask]
 
 cat_pipe = Pipeline([
     ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
@@ -63,10 +60,6 @@ if st.button("Predict Emission Factor"):
     input_df = pd.DataFrame({'name': [industry]})
     pred = model.predict(input_df)[0]
     st.success(f"Predicted Emission Factor: {pred:.6f}")
-
-
-
-
 
 
 
