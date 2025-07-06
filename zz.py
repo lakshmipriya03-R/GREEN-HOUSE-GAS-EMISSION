@@ -2,40 +2,47 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# Load trained model and encoders
+# Load model and encoders
 model = joblib.load("ghg_model.pkl")
 encoders = joblib.load("ghg_encoders.pkl")
 
-st.set_page_config(page_title="GHG Emission Predictor", layout="centered")
-st.title("🌍 GHG Emission Factor Predictor")
-st.markdown("Enter industry details to predict the **Supply Chain Emission Factor (without margins)**.")
+# Get original label values
+industry_codes = encoders["Industry Code"].classes_
+industry_names = encoders["Industry Name"].classes_
+substance_names = encoders["Substance"].classes_
+unit_names = encoders["Unit"].classes_
 
-# Sample values from training (you can make dynamic with real df if needed)
-industry_codes = encoders["Industry Code"].classes_.tolist()
-industry_names = encoders["Industry Name"].classes_.tolist()
-substances = encoders["Substance"].classes_.tolist()
-units = encoders["Unit"].classes_.tolist()
+# Streamlit UI
+st.title("🌍 Greenhouse Gas Emission Predictor")
 
-# --- Input Fields ---
-industry_code = st.selectbox("🔢 Industry Code", industry_codes)
-industry_name = st.selectbox("🏭 Industry Name", industry_names)
-substance = st.selectbox("🧪 Substance", substances)
-unit = st.selectbox("📏 Unit", units)
-margin = st.number_input("📉 Margin of Supply Chain Emission Factor", min_value=0.0, step=0.001)
+st.markdown("Please select the inputs below to predict GHG Emission Factor:")
 
-# --- Predict ---
-if st.button("🔍 Predict Emission Factor"):
-    # Encode inputs
-    ic = encoders["Industry Code"].transform([industry_code])[0]
-    iname = encoders["Industry Name"].transform([industry_name])[0]
-    sub = encoders["Substance"].transform([substance])[0]
-    un = encoders["Unit"].transform([unit])[0]
+col1, col2 = st.columns(2)
 
-    # Create input DataFrame
-    input_df = pd.DataFrame([[ic, iname, sub, un, margin]],
-                            columns=["Industry Code", "Industry Name", "Substance", "Unit", "Margins of Supply Chain Emission Factors"])
+with col1:
+    selected_code = st.selectbox("Industry Code", industry_codes)
+    selected_name = st.selectbox("Industry Name", industry_names)
 
-    # Predict
-    prediction = model.predict(input_df)[0]
+with col2:
+    selected_substance = st.selectbox("GHG Substance", substance_names)
+    selected_unit = st.selectbox("Unit Type", unit_names)
 
-    st.success(f"💡 **Predicted Emission Factor (no margins):** `{prediction:.6f}` kg CO₂e/2018 USD")
+margin_value = st.number_input("Margin of Supply Chain Emission Factor", min_value=0.0, step=0.001)
+
+# Predict button
+if st.button("🔮 Predict Emission Factor"):
+    try:
+        # Encode selected values
+        code_enc = encoders["Industry Code"].transform([selected_code])[0]
+        name_enc = encoders["Industry Name"].transform([selected_name])[0]
+        sub_enc = encoders["Substance"].transform([selected_substance])[0]
+        unit_enc = encoders["Unit"].transform([selected_unit])[0]
+
+        # Prepare input and predict
+        input_data = [[code_enc, name_enc, sub_enc, unit_enc, margin_value]]
+        prediction = model.predict(input_data)[0]
+
+        st.success(f"🌱 Predicted Supply Chain Emission Factor: **{prediction:.6f}**")
+    except Exception as e:
+        st.error(f"Error during prediction: {e}")
+
